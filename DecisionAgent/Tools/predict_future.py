@@ -13,11 +13,10 @@ def forecast_demand(
 ) -> dict:
     n = ctx.n()
     if not 0 <= destination_index < n:
-        return {"ok": False, "error": f"node {destination_index} is out of range"}
+        return {"ok": False, "error": f"point {destination_index} is out of range"}
     if arrival_offset_min < 0:
         return {"ok": False, "error": "arrival_offset_min must be >= 0"}
 
-    dest_id = ctx.node_ids[destination_index]
     arrival = ctx.now + timedelta(minutes=arrival_offset_min)
     hour = arrival.hour + arrival.minute / 60.0
     base = 6.0 if destination_index == ctx.origin else 8.0 + (destination_index % 5)
@@ -29,7 +28,7 @@ def forecast_demand(
     return {
         "ok": True,
         "destination_index": destination_index,
-        "destination_id": dest_id,
+        "destination": ctx.point(destination_index),
         "arrival_offset_min": arrival_offset_min,
         "arrival_hour": round(hour, 2),
         "predicted_demand": demand,
@@ -43,10 +42,10 @@ def predict_future(
     destination_index: int,
     arrival_offset_min: float,
 ) -> dict:
-    """Predict demand at a destination at the time a path would arrive there.
+    """Predict demand at a destination coordinate at the time a path would arrive there.
 
     Args:
-        destination_index: Final node of a candidate path.
-        arrival_offset_min: Minutes after departure when the path reaches that node.
+        destination_index: Final point index of a candidate path.
+        arrival_offset_min: Minutes after departure when the path reaches that point.
     """
     return forecast_demand(wrapper.context, destination_index, arrival_offset_min)

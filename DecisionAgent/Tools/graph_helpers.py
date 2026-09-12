@@ -17,9 +17,9 @@ def _validate_path(ctx: RoutingContext, nodes: list[int]) -> dict | None:
     seen: set[int] = set()
     for node in nodes:
         if not 0 <= node < n:
-            return {"ok": False, "error": f"node {node} is out of range"}
+            return {"ok": False, "error": f"point {node} is out of range"}
         if node in seen:
-            return {"ok": False, "error": "no repeated nodes"}
+            return {"ok": False, "error": "no repeated points"}
         seen.add(node)
     for a, b in zip(nodes, nodes[1:]):
         if not ctx.hop_is_valid(a, b):
@@ -39,23 +39,19 @@ def compute_path_cost(ctx: RoutingContext, nodes: list[int]) -> dict:
         hop = ctx.cost(a, b)
         total += hop
         arrival += hop
-        stops.append(
-            {
-                "node_index": b,
-                "node_id": ctx.node_ids[b],
-                "arrival_offset_min": arrival,
-            }
-        )
+        stop = {"index": b, "arrival_offset_min": arrival, **ctx.point(b)}
+        stops.append(stop)
 
     dest = nodes[-1]
     return {
         "ok": True,
-        "nodes": nodes,
+        "indexes": nodes,
+        "coordinates": [ctx.point(i) for i in nodes],
         "total_weight": total,
         "arrival_offset_min": arrival,
         "delivery_count": len(nodes) - 1,
         "destination_index": dest,
-        "destination_id": ctx.node_ids[dest],
+        "destination": ctx.point(dest),
         "stops": stops,
     }
 
@@ -105,12 +101,12 @@ def enumerate_candidate_paths(
         dest = path[-1]
         paths.append(
             {
-                "nodes": path,
-                "node_ids": [ctx.node_ids[i] for i in path],
+                "indexes": path,
+                "coordinates": [ctx.point(i) for i in path],
                 "total_weight": cost,
                 "delivery_count": len(path) - 1,
                 "destination_index": dest,
-                "destination_id": ctx.node_ids[dest],
+                "destination": ctx.point(dest),
                 "arrival_offset_min": cost,
             }
         )
@@ -119,33 +115,34 @@ def enumerate_candidate_paths(
 
 def graph_summary(ctx: RoutingContext) -> str:
     rows = "\n".join(
-        f"{i}:{ctx.node_ids[i]} -> "
+        f"{ctx.fmt(i)} -> "
         + ", ".join(
-            f"{ctx.node_ids[j]}={w}"
+            f"{ctx.fmt(j)}={w}min"
             for j, w in enumerate(row)
             if i != j and ctx.hop_is_valid(i, j)
         )
         for i, row in enumerate(ctx.matrix)
     )
     return (
-        f"origin_index={ctx.origin} origin_id={ctx.node_ids[ctx.origin]}\n"
+        f"origin={ctx.fmt(ctx.origin)}\n"
         f"n={ctx.n()}\n"
+        f"points use [lat, lon]; weights are travel minutes\n"
         f"{rows}"
     )
 
 
 @tool
 def get_graph_summary(wrapper: RunContextWrapper[RoutingContext]) -> str:
-    """Return node ids, origin, and the adjacency matrix as text."""
+    """Return coordinates, origin, and travel-minute weights as text."""
     return graph_summary(wrapper.context)
 
 
 @tool
 def path_cost(wrapper: RunContextWrapper[RoutingContext], nodes: list[int]) -> dict:
-    """Validate a path and return total weight. Matrix weights are treated as minutes.
+    """Validate a path and return total travel minutes.
 
     Args:
-        nodes: Node indexes in visit order. Must start at origin and include at least one delivery.
+        nodes: Point indexes in visit order. Must start at origin and include at least one delivery.
     """
     return compute_path_cost(wrapper.context, nodes)
 

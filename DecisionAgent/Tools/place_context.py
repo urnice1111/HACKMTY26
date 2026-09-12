@@ -4,7 +4,7 @@ from agents.decorators import tool
 from DecisionAgent.Context.context import RoutingContext
 
 _NOTES = [
-    "warehouse hub; staging area, not a customer drop",
+    "depot / start; staging area, not a customer drop",
     "dense residential; evening peak 18:00-21:00, street parking tight",
     "office corridor; weekday lunch demand, quiet after 19:00",
     "university zone; class-change spikes, limited truck access",
@@ -17,20 +17,20 @@ _NOTES = [
 
 @tool
 def get_place_context(wrapper: RunContextWrapper[RoutingContext], node_index: int) -> str:
-    """Text context for a node: neighborhood notes, events, access restrictions.
+    """Text context for a coordinate: neighborhood notes, events, access restrictions.
 
     Args:
-        node_index: Index of the node in the adjacency matrix.
+        node_index: Index of the point in the coordinates list.
     """
     ctx = wrapper.context
     n = ctx.n()
     if not 0 <= node_index < n:
-        return f"error: node {node_index} is out of range"
-    node_id = ctx.node_ids[node_index]
+        return f"error: point {node_index} is out of range"
     if node_index == ctx.origin:
         note = _NOTES[0]
         role = "origin"
     else:
         note = _NOTES[(node_index % (len(_NOTES) - 1)) + 1]
         role = "delivery"
-    return f"node_index={node_index} node_id={node_id} role={role}. {note}"
+    lat, lon = ctx.coordinates[node_index]
+    return f"{ctx.fmt(node_index)} role={role} lat={lat} lon={lon}. {note}"

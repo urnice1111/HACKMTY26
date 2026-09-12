@@ -11,25 +11,26 @@ def build_instructions(
     agent: Agent[RoutingContext],
 ) -> str:
     ctx = wrapper.context
-    origin_id = ctx.node_ids[ctx.origin]
-    labels = ", ".join(f"{i}:{name}" for i, name in enumerate(ctx.node_ids))
+    labels = ", ".join(ctx.fmt(i) for i in range(ctx.n()))
+    origin = ctx.point(ctx.origin)
     return f"""
-You plan delivery routes on a weighted graph.
+You plan delivery routes between geographic coordinates.
 
 Current request:
-- origin index: {ctx.origin} ({origin_id})
-- nodes: {labels}
+- origin index: {ctx.origin} lat={origin["lat"]} lon={origin["lon"]}
+- points: {labels}
 - now: {ctx.now.isoformat()}
-- matrix weights are travel minutes
+- points have no names or ids; identify them by index and (lat, lon)
+- weights are travel minutes
 
 Rules:
-- Every path starts at origin {ctx.origin}.
-- A path may include one delivery or several. Do not repeat nodes.
+- Every path starts at origin index {ctx.origin}.
+- A path may include one delivery or several. Do not repeat points.
 - Never invent distances. Call path_cost (or use candidate_paths) for weights.
 - Workflow:
   1. Call get_graph_summary.
   2. Call candidate_paths to get a pool of single-stop and multi-stop routes.
-  3. For promising nodes, call get_place_context and get_numeric_signals.
+  3. For promising points, call get_place_context and get_numeric_signals.
   4. For EACH serious candidate, call predict_future on the FINAL destination
      with that path's arrival_offset_min.
   5. Call score_path with total_weight and predicted_demand.
@@ -37,6 +38,7 @@ Rules:
     score = predicted_demand / (1 + total_weight)
   Higher is better.
 - Return the top 3 paths, ranked 1-3. If the graph has fewer valid paths, return all of them.
+- Fill indexes and coordinates for every point in the path.
 - Fill demand_forecast from predict_future and score from score_path.
 - Keep why short and specific.
 """.strip()

@@ -1,6 +1,7 @@
 from typing import Any
 
 __all__ = [
+    "GeoPoint",
     "PathStop",
     "RankedPath",
     "RoutingContext",
@@ -16,7 +17,7 @@ def __getattr__(name: str) -> Any:
         from DecisionAgent.Context.context import RoutingContext
 
         return RoutingContext
-    if name in {"PathStop", "RankedPath", "RoutingDecision"}:
+    if name in {"GeoPoint", "PathStop", "RankedPath", "RoutingDecision"}:
         from DecisionAgent.Models import structured_output
 
         return getattr(structured_output, name)

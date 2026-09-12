@@ -1,3 +1,3 @@
-from DecisionAgent.Models.structured_output import PathStop, RankedPath, RoutingDecision
+from DecisionAgent.Models.structured_output import GeoPoint, PathStop, RankedPath, RoutingDecision
 
-__all__ = ["PathStop", "RankedPath", "RoutingDecision"]
+__all__ = ["GeoPoint", "PathStop", "RankedPath", "RoutingDecision"]
