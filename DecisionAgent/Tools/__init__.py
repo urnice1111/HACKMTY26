@@ -3,6 +3,7 @@ from DecisionAgent.Tools.numeric_context import get_numeric_signals
 from DecisionAgent.Tools.place_context import get_place_context
 from DecisionAgent.Tools.predict_future import predict_future
 from DecisionAgent.Tools.scoring import score_path
+from DecisionAgent.Tools.take_decision import take_decision
 
 ROUTING_TOOLS = [
     get_graph_summary,
@@ -12,6 +13,7 @@ ROUTING_TOOLS = [
     get_numeric_signals,
     predict_future,
     score_path,
+    take_decision,
 ]
 
 __all__ = [
@@ -23,4 +25,5 @@ __all__ = [
     "path_cost",
     "predict_future",
     "score_path",
+    "take_decision",
 ]

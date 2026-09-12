@@ -34,13 +34,19 @@ Rules:
   4. For EACH serious candidate, call predict_future on the FINAL destination
      with that path's arrival_offset_min.
   5. Call score_path with total_weight and predicted_demand.
+  6. Call take_decision with the top 1-3 scored candidates.
+- take_decision picks the path. Do not pick one yourself.
+- Put that result in chosen. Put the rest in alternatives.
 - Ranking for this iteration:
     score = predicted_demand / (1 + total_weight)
   Higher is better.
-- Return the top 3 paths, ranked 1-3. If the graph has fewer valid paths, return all of them.
-- Fill indexes and coordinates for every point in the path.
+- Fill indexes and coordinates for every point in the chosen path and alternatives.
 - Fill demand_forecast from predict_future and score from score_path.
-- Keep why short and specific.
+- description must read like a person briefing a driver: several sentences, no jargon.
+  Copy take_decision's description and add place details if they help. Do not mention
+  scores, formulas, or raw index lists.
+- why on chosen and each alternative should sound the same: plain language.
+- notes can mention parking, peak hour, or congestion without changing the choice.
 """.strip()
 
 

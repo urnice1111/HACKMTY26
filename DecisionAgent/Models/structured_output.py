@@ -24,9 +24,24 @@ class RankedPath(BaseModel):
     destination: GeoPoint
     demand_forecast: float
     score: float
-    why: str
+    why: str = Field(
+        description=(
+            "Everyday-language reason for this route: how long the drive is, "
+            "how busy the last stop looks, and why it was kept or skipped."
+        )
+    )
 
 
 class RoutingDecision(BaseModel):
-    paths: list[RankedPath] = Field(min_length=1, max_length=3)
-    notes: str
+    chosen: RankedPath
+    alternatives: list[RankedPath] = Field(default_factory=list)
+    description: str = Field(
+        description=(
+            "Dispatcher-style explanation in plain language. Copy take_decision's "
+            "description, then add neighborhood details if useful. Do not talk about "
+            "formulas, scores, or index lists."
+        )
+    )
+    notes: str = Field(
+        description="Optional extra color: parking, peak hour, congestion. Plain language."
+    )
