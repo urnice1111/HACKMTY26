@@ -1,13 +1,11 @@
 from datetime import datetime
 
-from dotenv import load_dotenv
 from agents import Runner
 
+from DecisionAgent.config import require_api_key
 from DecisionAgent.Context.context import RoutingContext
 from DecisionAgent.Models.structured_output import RoutingDecision
 from DecisionAgent.agent import routing_agent
-
-load_dotenv()
 
 
 def _parse_now(now: datetime | str | None) -> datetime:
@@ -60,6 +58,7 @@ async def run_routing_agent(
     extra: dict | None = None,
 ) -> RoutingDecision:
     """Entry point for the API: pass the adjacency matrix, get the top paths."""
+    require_api_key()
     ctx = build_routing_context(matrix, node_ids=node_ids, origin=origin, now=now, extra=extra)
     result = await Runner.run(
         routing_agent,
@@ -78,6 +77,7 @@ def run_routing_agent_sync(
     extra: dict | None = None,
 ) -> RoutingDecision:
     """Sync wrapper for Flask / non-async API handlers."""
+    require_api_key()
     ctx = build_routing_context(matrix, node_ids=node_ids, origin=origin, now=now, extra=extra)
     result = Runner.run_sync(
         routing_agent,

@@ -1,5 +1,11 @@
-"""Local check without calling the LLM: python -m DecisionAgent --dry-run"""
+"""python -m DecisionAgent          -> live OpenAI run
+python -m DecisionAgent --dry-run -> tools only, no LLM
+"""
 
+from __future__ import annotations
+
+import argparse
+import json
 from datetime import datetime
 
 from DecisionAgent.Context.context import RoutingContext
@@ -14,6 +20,7 @@ _SAMPLE_MATRIX = [
     [20, 10, 7, 0],
 ]
 _SAMPLE_IDS = ["hub", "A", "B", "C"]
+_SAMPLE_NOW = datetime(2026, 9, 12, 18, 0)
 
 
 def dry_run() -> None:
@@ -21,7 +28,7 @@ def dry_run() -> None:
         matrix=_SAMPLE_MATRIX,
         node_ids=_SAMPLE_IDS,
         origin=0,
-        now=datetime(2026, 9, 12, 18, 0),
+        now=_SAMPLE_NOW,
     )
     pool = enumerate_candidate_paths(ctx, k=8, max_deliveries=3)
     ranked = []
@@ -39,5 +46,27 @@ def dry_run() -> None:
         print("   ", compute_path_cost(ctx, path["nodes"]))
 
 
+def live_run() -> None:
+    from DecisionAgent.runner import run_routing_agent_sync
+
+    decision = run_routing_agent_sync(
+        matrix=_SAMPLE_MATRIX,
+        node_ids=_SAMPLE_IDS,
+        origin=0,
+        now=_SAMPLE_NOW,
+    )
+    print(json.dumps(decision.model_dump(), indent=2))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true", help="Skip the LLM and score paths locally")
+    args = parser.parse_args()
+    if args.dry_run:
+        dry_run()
+        return
+    live_run()
+
+
 if __name__ == "__main__":
-    dry_run()
+    main()

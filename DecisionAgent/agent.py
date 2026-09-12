@@ -1,7 +1,6 @@
-import os
-
 from agents import Agent, RunContextWrapper
 
+from DecisionAgent.config import model_name
 from DecisionAgent.Context.context import RoutingContext
 from DecisionAgent.Models.structured_output import RoutingDecision
 from DecisionAgent.Tools import ROUTING_TOOLS
@@ -48,5 +47,5 @@ routing_agent = Agent[RoutingContext](
     instructions=build_instructions,
     tools=ROUTING_TOOLS,
     output_type=RoutingDecision,
-    model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+    model=model_name(),
 )
