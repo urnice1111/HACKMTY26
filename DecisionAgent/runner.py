@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import time
+import uuid
 from datetime import datetime
 
 from agents import Runner
@@ -9,8 +13,9 @@ from DecisionAgent.Context.context import (
     build_matrix,
     parse_coordinates,
 )
-from DecisionAgent.Models.structured_output import RoutingDecision
+from DecisionAgent.Models.structured_output import AgentRun, GeoPoint, RoutingDecision, TokenUsage
 from DecisionAgent.agent import routing_agent
+from DecisionAgent.trace import extract_events
 
 
 def _parse_now(now: datetime | str | None) -> datetime:
@@ -19,6 +24,15 @@ def _parse_now(now: datetime | str | None) -> datetime:
     if isinstance(now, datetime):
         return now
     return datetime.fromisoformat(now.replace("Z", "+00:00"))
+
+
+def resolve_shift_id(payload: dict | None = None, extra: dict | None = None) -> str | None:
+    extra = extra or {}
+    payload = payload or {}
+    value = payload.get("shift_id") or extra.get("shift_id")
+    if value is None or value == "":
+        return None
+    return str(value)
 
 
 def build_routing_context(
@@ -58,16 +72,48 @@ def _decision(result) -> RoutingDecision:
     return RoutingDecision.model_validate(output)
 
 
-async def run_routing_agent(
+def _usage(result) -> TokenUsage:
+    usage = getattr(getattr(result, "context_wrapper", None), "usage", None)
+    return TokenUsage(
+        input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+        output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+    )
+
+
+def build_agent_run(
+    ctx: RoutingContext,
+    result,
+    duration_ms: float,
+    shift_id: str | None = None,
+) -> AgentRun:
+    origin = ctx.point(ctx.origin)
+    extra_shift = ctx.extra.get("shift_id") if ctx.extra else None
+    return AgentRun(
+        run_id=str(uuid.uuid4()),
+        shift_id=shift_id or (str(extra_shift) if extra_shift else None),
+        created_at=datetime.now().isoformat(),
+        duration_ms=round(duration_ms, 1),
+        point_count=ctx.n(),
+        origin=GeoPoint(lat=origin["lat"], lon=origin["lon"]),
+        decision=_decision(result),
+        events=extract_events(getattr(result, "new_items", None)),
+        usage=_usage(result),
+    )
+
+
+def _run_kwargs(
     coordinates: list,
-    matrix: list[list[float]] | None = None,
-    origin: int = 0,
-    now: datetime | str | None = None,
-    extra: dict | None = None,
-    speed_kmh: float = AVG_SPEED_KMH,
-) -> RoutingDecision:
-    """Entry point for the API: pass coordinates, get the top paths."""
-    require_api_key()
+    matrix: list[list[float]] | None,
+    origin: int,
+    now: datetime | str | None,
+    extra: dict | None,
+    speed_kmh: float,
+    shift_id: str | None,
+) -> tuple[RoutingContext, str | None]:
+    extra = dict(extra or {})
+    resolved = shift_id or extra.get("shift_id")
+    if resolved:
+        extra["shift_id"] = resolved
     ctx = build_routing_context(
         coordinates,
         matrix=matrix,
@@ -76,13 +122,31 @@ async def run_routing_agent(
         extra=extra,
         speed_kmh=speed_kmh,
     )
+    return ctx, resolve_shift_id(extra=extra)
+
+
+async def run_routing_agent(
+    coordinates: list,
+    matrix: list[list[float]] | None = None,
+    origin: int = 0,
+    now: datetime | str | None = None,
+    extra: dict | None = None,
+    speed_kmh: float = AVG_SPEED_KMH,
+    shift_id: str | None = None,
+) -> AgentRun:
+    """Entry point for the API: pass coordinates, get decision + tool replay events."""
+    require_api_key()
+    ctx, resolved_shift = _run_kwargs(
+        coordinates, matrix, origin, now, extra, speed_kmh, shift_id
+    )
+    started = time.perf_counter()
     result = await Runner.run(
         routing_agent,
         input=_prompt(ctx),
         context=ctx,
         max_turns=30,
     )
-    return _decision(result)
+    return build_agent_run(ctx, result, (time.perf_counter() - started) * 1000, resolved_shift)
 
 
 def run_routing_agent_sync(
@@ -92,40 +156,41 @@ def run_routing_agent_sync(
     now: datetime | str | None = None,
     extra: dict | None = None,
     speed_kmh: float = AVG_SPEED_KMH,
-) -> RoutingDecision:
+    shift_id: str | None = None,
+) -> AgentRun:
     """Sync wrapper for Flask / non-async API handlers."""
     require_api_key()
-    ctx = build_routing_context(
-        coordinates,
-        matrix=matrix,
-        origin=origin,
-        now=now,
-        extra=extra,
-        speed_kmh=speed_kmh,
+    ctx, resolved_shift = _run_kwargs(
+        coordinates, matrix, origin, now, extra, speed_kmh, shift_id
     )
+    started = time.perf_counter()
     result = Runner.run_sync(
         routing_agent,
         input=_prompt(ctx),
         context=ctx,
         max_turns=30,
     )
-    return _decision(result)
+    return build_agent_run(ctx, result, (time.perf_counter() - started) * 1000, resolved_shift)
 
 
 def run_routing_payload(payload: dict) -> dict:
     """JSON in / JSON out helper for the API layer.
 
     Required: coordinates = [[lat, lon], ...]
-    Optional: matrix, origin, now, extra, speed_kmh
+    Optional: matrix, origin, now, extra, speed_kmh, shift_id
+
+    Returns an AgentRun dict: decision nested under "decision", plus events[] for the dashboard.
     """
     if "coordinates" not in payload:
         raise ValueError("payload must include coordinates: [[lat, lon], ...]")
-    decision = run_routing_agent_sync(
+    extra = dict(payload.get("extra") or {})
+    run = run_routing_agent_sync(
         coordinates=payload["coordinates"],
         matrix=payload.get("matrix"),
         origin=payload.get("origin", 0),
         now=payload.get("now"),
-        extra=payload.get("extra"),
+        extra=extra,
         speed_kmh=payload.get("speed_kmh", AVG_SPEED_KMH),
+        shift_id=resolve_shift_id(payload, extra),
     )
-    return decision.model_dump()
+    return run.model_dump()

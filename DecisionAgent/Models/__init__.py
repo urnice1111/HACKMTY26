@@ -1,3 +1,19 @@
-from DecisionAgent.Models.structured_output import GeoPoint, PathStop, RankedPath, RoutingDecision
+from DecisionAgent.Models.structured_output import (
+    AgentRun,
+    GeoPoint,
+    PathStop,
+    RankedPath,
+    RoutingDecision,
+    TokenUsage,
+    ToolEvent,
+)
 
-__all__ = ["GeoPoint", "PathStop", "RankedPath", "RoutingDecision"]
+__all__ = [
+    "AgentRun",
+    "GeoPoint",
+    "PathStop",
+    "RankedPath",
+    "RoutingDecision",
+    "TokenUsage",
+    "ToolEvent",
+]
