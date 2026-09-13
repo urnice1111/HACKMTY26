@@ -13,11 +13,11 @@ class PathCandidate(BaseModel):
     score: float | None = None
 
 
-def _minutes_phrase(minutes: float) -> str:
-    rounded = round(minutes)
-    if abs(minutes - rounded) < 0.15:
-        return f"{rounded} minutes"
-    return f"{minutes:.1f} minutes"
+def _weight_phrase(weight: float) -> str:
+    rounded = round(weight)
+    if abs(weight - rounded) < 0.15:
+        return f"{rounded} weighted route units"
+    return f"{weight:.1f} weighted route units"
 
 
 def _stops_phrase(indexes: list[int]) -> str:
@@ -48,7 +48,7 @@ def describe_choice(chosen: dict, alternatives: list[dict]) -> str:
     )
     chosen_stops = _stops_phrase(chosen["indexes"])
     opening = (
-        f"Go with {chosen_stops}. The drive is about {_minutes_phrase(chosen['total_weight'])}, "
+        f"Go with {chosen_stops}. Its route cost is about {_weight_phrase(chosen['total_weight'])}, "
         f"and there is {_demand_phrase(chosen['demand_forecast'], peak)}. "
         f"That combination is the best tradeoff right now: enough people waiting relative to how long the trip takes."
     )
@@ -70,7 +70,7 @@ def describe_choice(chosen: dict, alternatives: list[dict]) -> str:
             else:
                 reason = "it is simply a worse balance of time and demand"
             bits.append(
-                f"Skipping {alt_stops}: that one is about {_minutes_phrase(alt['total_weight'])} "
+                f"Skipping {alt_stops}: that one costs about {_weight_phrase(alt['total_weight'])} "
                 f"with {_demand_phrase(alt['demand_forecast'], peak)}, so {reason}."
             )
         rest = " ".join(bits)

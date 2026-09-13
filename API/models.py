@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -52,3 +53,55 @@ class OptimizedRoute(BaseModel):
 
     puntosVisitar: list[Node]
     description: str
+
+
+class SimulatorStop(BaseModel):
+    """One of the simulator's route points, in its native JSON shape."""
+
+    id: str
+    pedido_id: str | None = None
+    type: Literal["courier", "pick", "drop"]
+    latitud: float
+    longitud: float
+    obligatoria: bool = False
+
+
+class SimulatorPrecedence(BaseModel):
+    pedido_id: str
+    pick: str
+    drop: str
+
+
+class SimulatorRestrictions(BaseModel):
+    capacidad_maxima: int = Field(ge=0)
+    pedidos_activos: list[dict] = Field(default_factory=list)
+    precedencias: list[SimulatorPrecedence] = Field(default_factory=list)
+
+
+class SimulatorDecisionRequest(BaseModel):
+    """Contract sent by the Go simulator to ``POST /decision``.
+
+    The matrix preserves ``null`` because it represents an unreachable or
+    precedence-forbidden hop. The adapter converts it to the agent's negative
+    sentinel before planning.
+    """
+
+    evento: str
+    tiempo_simulado: str
+    estado_courier: CourierState
+    pedidos_activos: int = Field(ge=0)
+    capacidad_maxima: int = Field(ge=0)
+    puntos_ruta: list[SimulatorStop] = Field(min_length=1)
+    matriz: list[list[float | None]]
+    matriz_unidad: Literal["mxn_equivalente"]
+    valor_minuto_mxn: float = Field(gt=0)
+    restricciones: SimulatorRestrictions
+    pedidos_disponibles: list[dict] = Field(default_factory=list)
+
+
+class SimulatorDecisionResponse(BaseModel):
+    """Decision shape consumed by ``internal/sim.AgentClient``."""
+
+    aceptar_pedidos: list[str] = Field(default_factory=list)
+    paradas_ordenadas: list[SimulatorStop] = Field(default_factory=list)
+    ruta_propuesta: list[dict] = Field(default_factory=list)

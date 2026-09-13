@@ -21,12 +21,15 @@ Current request:
 - points: {labels}
 - now: {ctx.now.isoformat()}
 - points have no names or ids; identify them by index and (lat, lon)
-- weights are travel minutes
+- weights are {ctx.matrix_unit()}; lower is better
+- {ctx.route_constraints_summary()}
 
 Rules:
 - Every path starts at origin index {ctx.origin}.
-- A path may include one delivery or several. Do not repeat points.
-- Never invent distances. Call path_cost (or use candidate_paths) for weights.
+- A path may include one stop or several. Do not repeat points.
+- Never invent weights. Call path_cost (or use candidate_paths) for them.
+- When pickup/drop constraints are present, use only complete paths returned by
+  candidate_paths. Do not make up a partial order or change its stop order.
 - Workflow:
   1. Call get_graph_summary.
   2. Call candidate_paths to get a pool of single-stop and multi-stop routes.

@@ -104,3 +104,78 @@ class RoutingContext:
     def fmt(self, i: int) -> str:
         lat, lon = self.coordinates[i]
         return f"{i}@({lat:.6f}, {lon:.6f})"
+
+    def matrix_unit(self) -> str:
+        """Human-readable unit for the matrix without changing its values."""
+        value = self.extra.get("matrix_unit")
+        return str(value) if value else "travel minutes"
+
+    def route_rules(self) -> dict:
+        rules = self.extra.get("route_constraints")
+        return rules if isinstance(rules, dict) else {}
+
+    def max_route_stops(self, requested: int) -> int:
+        """Keep candidate generation within the simulator's capacity bound."""
+        maximum = self.route_rules().get("max_route_stops")
+        if isinstance(maximum, int) and maximum >= 0:
+            return min(requested, maximum)
+        return requested
+
+    def route_constraint_error(self, nodes: list[int], *, complete: bool) -> str | None:
+        """Return a constraint violation for a route prefix or complete plan.
+
+        The constraints are optional so the DecisionAgent remains usable by its
+        standalone CLI.  When called by the simulator, they force candidate
+        paths to include mandatory stops, pair new pickups with their drops,
+        respect precedence, and stay under the available capacity.
+        """
+        rules = self.route_rules()
+        if not rules:
+            return None
+        positions = {index: offset for offset, index in enumerate(nodes)}
+        required = {
+            index
+            for index in rules.get("required_stop_indexes", [])
+            if isinstance(index, int)
+        }
+        if complete and not required.issubset(positions):
+            return "path omits a mandatory stop"
+
+        new_orders = 0
+        for raw_order in rules.get("orders", []):
+            if not isinstance(raw_order, dict):
+                continue
+            order_id = str(raw_order.get("pedido_id", "unknown"))
+            pick = raw_order.get("pick_index")
+            drop = raw_order.get("drop_index")
+            pick = pick if isinstance(pick, int) else None
+            drop = drop if isinstance(drop, int) else None
+            has_pick = pick is not None and pick in positions
+            has_drop = drop is not None and drop in positions
+
+            if has_drop and pick is not None and not has_pick:
+                return f"order {order_id} drops before its pickup"
+            if has_pick and has_drop and positions[pick] > positions[drop]:
+                return f"order {order_id} drops before its pickup"
+            if not raw_order.get("is_active", False) and (has_pick or has_drop):
+                new_orders += 1
+                if complete and not (has_pick and has_drop):
+                    return f"new order {order_id} must include pickup and drop"
+
+        maximum_new = rules.get("max_new_orders")
+        if isinstance(maximum_new, int) and new_orders > maximum_new:
+            return "path exceeds the available order capacity"
+        return None
+
+    def route_constraints_summary(self) -> str:
+        rules = self.route_rules()
+        if not rules:
+            return "No pickup/drop constraints were provided."
+        required = rules.get("required_stop_indexes", [])
+        maximum_new = rules.get("max_new_orders", 0)
+        return (
+            "This is a constrained pickup/drop plan. "
+            f"Mandatory stop indexes: {required}. "
+            f"At most {maximum_new} new orders may be accepted. "
+            "A new order must include pickup and drop, in that order."
+        )

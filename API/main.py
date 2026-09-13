@@ -3,7 +3,12 @@ import logging
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from API.models import OptimizeRouteRequest, OptimizedRoute
+from API.models import (
+    OptimizeRouteRequest,
+    OptimizedRoute,
+    SimulatorDecisionRequest,
+    SimulatorDecisionResponse,
+)
 from API.run_store import (
     DEFAULT_SHIFT_ID,
     RunListResponse,
@@ -13,6 +18,13 @@ from API.run_store import (
     save_run,
     stats_from,
     to_summary,
+)
+from API.simulator_adapter import (
+    SimulatorContractError,
+    agent_coordinates,
+    agent_extra,
+    agent_matrix,
+    decision_response,
 )
 from DecisionAgent.Models.structured_output import AgentRun
 from DecisionAgent.runner import run_routing_agent
@@ -71,6 +83,45 @@ def mock_route_indexes(matrix: list[list[float]], point_count: int) -> list[int]
 @app.get("/")
 def health_check() -> dict[str, str]:
     return {"message": "Courier Decision API funcionando"}
+
+
+@app.post("/decision", response_model=SimulatorDecisionResponse)
+async def decide_for_simulator(request: SimulatorDecisionRequest) -> SimulatorDecisionResponse:
+    """Use the Go simulator's native contract to obtain a feasible route plan.
+
+    The streaming callback stores the intermediate tool trace immediately, so
+    the React dashboard can replay an in-progress decision while Go waits for
+    the final response.
+    """
+    try:
+        extra = agent_extra(request)
+        logger.info(
+            "Simulator event %s: planning across %s points",
+            request.evento,
+            len(request.puntos_ruta),
+        )
+        agent_run = await run_routing_agent(
+            coordinates=agent_coordinates(request),
+            matrix=agent_matrix(request),
+            origin=0,
+            now=request.tiempo_simulado,
+            extra=extra,
+            on_update=save_run,
+        )
+        if agent_run.decision is None:
+            raise HTTPException(status_code=502, detail="DecisionAgent terminó sin decisión")
+        return decision_response(request, agent_run.decision.chosen.indexes)
+    except SimulatorContractError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except HTTPException:
+        raise
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=f"Datos inválidos para el agente: {error}") from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=f"DecisionAgent no disponible: {error}") from error
+    except Exception as error:
+        logger.exception("DecisionAgent error while handling simulator request")
+        raise HTTPException(status_code=500, detail=f"DecisionAgent error: {error}") from error
 
 
 @app.post("/optimize-route", response_model=OptimizedRoute)

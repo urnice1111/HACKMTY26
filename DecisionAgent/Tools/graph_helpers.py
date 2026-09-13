@@ -24,6 +24,8 @@ def _validate_path(ctx: RoutingContext, nodes: list[int]) -> dict | None:
     for a, b in zip(nodes, nodes[1:]):
         if not ctx.hop_is_valid(a, b):
             return {"ok": False, "error": f"no valid hop from {a} to {b}"}
+    if error := ctx.route_constraint_error(nodes, complete=True):
+        return {"ok": False, "error": error}
     return None
 
 
@@ -63,13 +65,16 @@ def enumerate_candidate_paths(
 ) -> dict:
     k = max(1, min(k, 15))
     max_deliveries = max(1, min(max_deliveries, 4))
+    max_deliveries = ctx.max_route_stops(max_deliveries)
+    if max_deliveries < 1:
+        return {"ok": True, "count": 0, "paths": []}
     origin = ctx.origin
     n = ctx.n()
     found: list[tuple[float, list[int]]] = []
 
     def dfs(path: list[int], cost: float, visited: set[int]) -> None:
         deliveries = len(path) - 1
-        if 1 <= deliveries <= max_deliveries:
+        if 1 <= deliveries <= max_deliveries and not ctx.route_constraint_error(path, complete=True):
             found.append((cost, path[:]))
         if deliveries >= max_deliveries or len(found) >= _MAX_PATHS_COLLECTED:
             return
@@ -77,7 +82,10 @@ def enumerate_candidate_paths(
         for nxt in range(n):
             if nxt in visited or not ctx.hop_is_valid(last, nxt):
                 continue
-            dfs(path + [nxt], cost + ctx.cost(last, nxt), visited | {nxt})
+            next_path = path + [nxt]
+            if ctx.route_constraint_error(next_path, complete=False):
+                continue
+            dfs(next_path, cost + ctx.cost(last, nxt), visited | {nxt})
             if len(found) >= _MAX_PATHS_COLLECTED:
                 return
 
@@ -126,7 +134,8 @@ def graph_summary(ctx: RoutingContext) -> str:
     return (
         f"origin={ctx.fmt(ctx.origin)}\n"
         f"n={ctx.n()}\n"
-        f"points use [lat, lon]; weights are travel minutes\n"
+        f"points use [lat, lon]; weights are {ctx.matrix_unit()}\n"
+        f"{ctx.route_constraints_summary()}\n"
         f"{rows}"
     )
 
@@ -139,7 +148,7 @@ def get_graph_summary(wrapper: RunContextWrapper[RoutingContext]) -> str:
 
 @tool
 def path_cost(wrapper: RunContextWrapper[RoutingContext], nodes: list[int]) -> dict:
-    """Validate a path and return total travel minutes.
+    """Validate a complete feasible path and return its total matrix weight.
 
     Args:
         nodes: Point indexes in visit order. Must start at origin and include at least one delivery.
@@ -153,10 +162,10 @@ def candidate_paths(
     k: int = 8,
     max_deliveries: int = 3,
 ) -> dict:
-    """Return cheap candidate paths from origin with 1 or more deliveries.
+    """Return cheap complete, feasible candidate paths from origin.
 
     Args:
         k: Maximum number of paths to return.
-        max_deliveries: Maximum deliveries (stops after origin) in a path.
+        max_deliveries: Maximum stops after origin in a path.
     """
     return enumerate_candidate_paths(wrapper.context, k=k, max_deliveries=max_deliveries)
