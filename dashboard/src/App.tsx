@@ -20,6 +20,8 @@ export default function App() {
   const [replayDone, setReplayDone] = useState(false);
   const seen = useRef(new Set<string>());
   const autoPlayed = useRef(new Set<string>());
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
 
   const refresh = useCallback(async () => {
     try {
@@ -41,6 +43,12 @@ export default function App() {
         }
       }
       for (const item of list) seen.current.add(item.run_id);
+
+      const currentId = selectedIdRef.current ?? newest?.run_id ?? null;
+      if (currentId) {
+        const nextDetail = await getRun(currentId);
+        setDetail(nextDetail);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the API");
     }
@@ -73,6 +81,9 @@ export default function App() {
     setReplayDone(done);
   }, []);
 
+  const decisionReady = Boolean(detail?.decision) && (replayDone || detail?.status === "complete");
+  const live = detail?.status === "running";
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -99,7 +110,7 @@ export default function App() {
         </form>
         <p className={isMock ? "live mock" : "live"}>
           <span className="dot" />
-          {isMock ? "Mock data" : "Live poll"}
+          {isMock ? "Mock data" : live ? "Live run" : "Live poll"}
         </p>
       </header>
 
@@ -120,13 +131,14 @@ export default function App() {
               <ToolReplay
                 events={detail.events}
                 replayKey={detail.run_id}
+                live={live}
                 onComplete={onReplayComplete}
               />
-              <DecisionCopy run={detail} revealed={replayDone} />
+              <DecisionCopy run={detail} revealed={decisionReady} />
               <ComparePanel
-                chosen={detail.decision.chosen}
-                alternatives={detail.decision.alternatives}
-                revealed={replayDone}
+                chosen={detail.decision?.chosen}
+                alternatives={detail.decision?.alternatives ?? []}
+                revealed={decisionReady}
               />
             </>
           ) : (

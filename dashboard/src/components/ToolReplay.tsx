@@ -15,23 +15,37 @@ const ICONS: Record<string, string> = {
 type Props = {
   events: ToolEvent[];
   replayKey: string;
+  live?: boolean;
   onComplete: (done: boolean) => void;
 };
 
-export function ToolReplay({ events, replayKey, onComplete }: Props) {
+export function ToolReplay({ events, replayKey, live = false, onComplete }: Props) {
   const ordered = [...events].sort((a, b) => a.seq - b.seq);
   const [visible, setVisible] = useState(0);
   const [playing, setPlaying] = useState(true);
   const completeRef = useRef(onComplete);
   completeRef.current = onComplete;
+  const followedLive = useRef(false);
 
   useEffect(() => {
     setVisible(0);
     setPlaying(true);
+    followedLive.current = false;
     completeRef.current(false);
   }, [replayKey]);
 
   useEffect(() => {
+    if (live) {
+      followedLive.current = true;
+      setVisible(ordered.length);
+      completeRef.current(false);
+      return;
+    }
+    if (followedLive.current) {
+      setVisible(ordered.length);
+      completeRef.current(true);
+      return;
+    }
     if (ordered.length > 0 && visible >= ordered.length) {
       completeRef.current(true);
       return;
@@ -39,21 +53,22 @@ export function ToolReplay({ events, replayKey, onComplete }: Props) {
     if (!playing || visible >= ordered.length) return;
     const id = window.setTimeout(() => setVisible((n) => n + 1), 700);
     return () => window.clearTimeout(id);
-  }, [playing, visible, ordered.length]);
+  }, [live, playing, visible, ordered.length]);
 
   const current = ordered[visible - 1];
 
   return (
     <section className="panel">
       <header className="panel-head">
-        <h2>Agent replay</h2>
+        <h2>{live ? "Agent live" : "Agent replay"}</h2>
         <div className="replay-controls">
-          <button type="button" onClick={() => setPlaying((p) => !p)}>
+          <button type="button" onClick={() => setPlaying((p) => !p)} disabled={live}>
             {playing ? "Pause" : "Play"}
           </button>
           <button
             type="button"
             onClick={() => {
+              followedLive.current = false;
               setVisible(0);
               setPlaying(true);
               completeRef.current(false);
@@ -66,6 +81,7 @@ export function ToolReplay({ events, replayKey, onComplete }: Props) {
             onClick={() => {
               setVisible(ordered.length);
               setPlaying(false);
+              if (!live) completeRef.current(true);
             }}
           >
             Skip
@@ -93,6 +109,7 @@ export function ToolReplay({ events, replayKey, onComplete }: Props) {
           );
         })}
       </ol>
+      {ordered.length === 0 && live ? <p className="muted">Waiting for the first tool…</p> : null}
       {current ? (
         <p className="sr-only" aria-live="polite">
           {current.label}. {current.summary}

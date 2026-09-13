@@ -29,6 +29,7 @@ class RunSummary(BaseModel):
     has_directions: bool
     excerpt: str
     chosen: ChosenSummary
+    status: str = "complete"
 
 
 class RunListResponse(BaseModel):
@@ -84,24 +85,39 @@ def list_runs(shift_id: str, limit: int = 50) -> list[AgentRun]:
 
 
 def to_summary(run: AgentRun) -> RunSummary:
-    chosen = run.decision.chosen
+    decision = run.decision
+    if decision is None:
+        last = run.events[-1].label if run.events else "Thinking…"
+        return RunSummary(
+            run_id=run.run_id,
+            created_at=run.created_at,
+            duration_ms=run.duration_ms,
+            event_count=len(run.events),
+            has_directions=False,
+            excerpt=last,
+            chosen=ChosenSummary(delivery_count=0, total_weight=0, destination_index=0),
+            status=run.status,
+        )
+    chosen = decision.chosen
     return RunSummary(
         run_id=run.run_id,
         created_at=run.created_at,
         duration_ms=run.duration_ms,
         event_count=len(run.events),
         has_directions=run.directions is not None,
-        excerpt=run.decision.description[:140],
+        excerpt=decision.description[:140],
         chosen=ChosenSummary(
             delivery_count=chosen.delivery_count,
             total_weight=chosen.total_weight,
             destination_index=chosen.destination_index,
         ),
+        status=run.status,
     )
 
 
 def stats_from(runs: list[AgentRun], shift_id: str) -> ShiftStats:
-    if not runs:
+    finished = [run for run in runs if run.status == "complete" and run.decision is not None]
+    if not finished:
         return ShiftStats(
             shift_id=shift_id,
             decision_count=0,
@@ -112,10 +128,10 @@ def stats_from(runs: list[AgentRun], shift_id: str) -> ShiftStats:
             picked_busier_stop=0,
         )
 
-    single = sum(1 for run in runs if run.decision.chosen.delivery_count == 1)
+    single = sum(1 for run in finished if run.decision.chosen.delivery_count == 1)
     shorter = 0
     busier = 0
-    for run in runs:
+    for run in finished:
         pack = [run.decision.chosen, *run.decision.alternatives]
         min_weight = min(path.total_weight for path in pack)
         max_demand = max(path.demand_forecast for path in pack)
@@ -123,13 +139,13 @@ def stats_from(runs: list[AgentRun], shift_id: str) -> ShiftStats:
             shorter += 1
         if run.decision.chosen.demand_forecast == max_demand:
             busier += 1
-    avg = sum(run.decision.chosen.total_weight for run in runs) / len(runs)
+    avg = sum(run.decision.chosen.total_weight for run in finished) / len(finished)
     return ShiftStats(
         shift_id=shift_id,
-        decision_count=len(runs),
+        decision_count=len(finished),
         avg_total_weight_min=round(avg, 1),
-        pct_single_stop=single / len(runs),
-        pct_multi_stop=1 - single / len(runs),
+        pct_single_stop=single / len(finished),
+        pct_multi_stop=1 - single / len(finished),
         picked_shorter_trip=shorter,
         picked_busier_stop=busier,
     )

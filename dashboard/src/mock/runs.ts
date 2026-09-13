@@ -90,6 +90,7 @@ export const MOCK_RUN_A: AgentRun = {
   },
   events: tools(),
   usage: { input_tokens: 1200, output_tokens: 400 },
+  status: "complete",
   directions: {
     steps: ["Leave the depot heading southeast.", "Continue about 4 minutes.", "Arrive at the drop."],
     reason: "Shortest busy run from the origin.",
@@ -141,6 +142,7 @@ export const MOCK_RUN_B: AgentRun = {
     { seq: 6, tool: "take_decision", label: "Picking the run", summary: "Picked the run that ends at point 2.", args: {}, ok: true },
   ],
   usage: { input_tokens: 900, output_tokens: 320 },
+  status: "complete",
   directions: null,
 };
 

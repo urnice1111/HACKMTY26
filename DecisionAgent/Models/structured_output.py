@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -73,17 +75,22 @@ class AgentRun(BaseModel):
     duration_ms: float
     point_count: int
     origin: GeoPoint
-    decision: RoutingDecision
+    decision: RoutingDecision | None = None
     events: list[ToolEvent] = Field(default_factory=list)
     usage: TokenUsage = Field(default_factory=TokenUsage)
     directions: RouteDirections | None = None
+    status: Literal["running", "complete", "error"] = "complete"
 
     @property
     def chosen(self) -> RankedPath:
         """Alias so API handlers can keep using decision.chosen."""
+        if self.decision is None:
+            raise RuntimeError("AgentRun has no decision yet")
         return self.decision.chosen
 
     @property
     def description(self) -> str:
         """Alias so API handlers can keep using decision.description."""
+        if self.decision is None:
+            raise RuntimeError("AgentRun has no decision yet")
         return self.decision.description

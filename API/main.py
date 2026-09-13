@@ -198,6 +198,7 @@ async def optimize_route(
                     "active_orders": courier.activeOrders,
                     "shift_id": DEFAULT_SHIFT_ID,
                 },
+                on_update=save_run,
             )
             logger.info("DecisionAgent returned route indexes: %s", decision.chosen.indexes)
             description = decision.description
@@ -217,8 +218,6 @@ async def optimize_route(
         visit_indexes = [index for index in indexes[1:] if 1 <= index <= len(points)]
         if len(visit_indexes) != len(indexes) - 1 or len(set(visit_indexes)) != len(visit_indexes):
             raise HTTPException(status_code=502, detail="DecisionAgent devolvió índices de ruta inválidos")
-
-        save_run(decision)
 
     return OptimizedRoute(
         points_to_visit=[points[index - 1] for index in visit_indexes],

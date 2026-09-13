@@ -33,6 +33,8 @@ export type ToolEvent = {
   ok: boolean;
 };
 
+export type RunStatus = "running" | "complete" | "error";
+
 export type AgentRun = {
   run_id: string;
   shift_id: string | null;
@@ -45,10 +47,11 @@ export type AgentRun = {
     alternatives: RankedPath[];
     description: string;
     notes: string;
-  };
+  } | null;
   events: ToolEvent[];
   usage: { input_tokens: number; output_tokens: number };
   directions?: { steps: string[]; reason: string } | null;
+  status?: RunStatus;
 };
 
 export type RunSummary = {
@@ -63,6 +66,7 @@ export type RunSummary = {
     total_weight: number;
     destination_index: number;
   };
+  status?: RunStatus;
 };
 
 export type ShiftStats = {

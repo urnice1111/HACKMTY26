@@ -1,7 +1,7 @@
 import type { RankedPath } from "../types";
 
 type Props = {
-  chosen: RankedPath;
+  chosen?: RankedPath;
   alternatives: RankedPath[];
   revealed: boolean;
 };
@@ -32,7 +32,7 @@ function Column({ title, path, winner }: { title: string; path: RankedPath; winn
 }
 
 export function ComparePanel({ chosen, alternatives, revealed }: Props) {
-  if (!revealed) {
+  if (!revealed || !chosen) {
     return <p className="muted">Compare unlocks after the agent picks a run.</p>;
   }
 

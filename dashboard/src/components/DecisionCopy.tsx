@@ -6,7 +6,7 @@ type Props = {
 };
 
 export function DecisionCopy({ run, revealed }: Props) {
-  if (!revealed) {
+  if (!revealed || !run.decision) {
     return null;
   }
 

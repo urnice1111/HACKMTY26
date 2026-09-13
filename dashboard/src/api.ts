@@ -8,7 +8,10 @@ const mockStarted = Date.now();
 const mockUnlockMs = 4000;
 
 function toSummary(run: AgentRun): RunSummary {
-  const excerpt = run.decision.description.slice(0, 140);
+  const excerpt =
+    run.decision?.description.slice(0, 140) ??
+    run.events.at(-1)?.label ??
+    "Thinking…";
   return {
     run_id: run.run_id,
     created_at: run.created_at,
@@ -16,11 +19,14 @@ function toSummary(run: AgentRun): RunSummary {
     event_count: run.events.length,
     has_directions: Boolean(run.directions),
     excerpt,
-    chosen: {
-      delivery_count: run.decision.chosen.delivery_count,
-      total_weight: run.decision.chosen.total_weight,
-      destination_index: run.decision.chosen.destination_index,
-    },
+    chosen: run.decision
+      ? {
+          delivery_count: run.decision.chosen.delivery_count,
+          total_weight: run.decision.chosen.total_weight,
+          destination_index: run.decision.chosen.destination_index,
+        }
+      : { delivery_count: 0, total_weight: 0, destination_index: 0 },
+    status: run.status ?? "complete",
   };
 }
 
@@ -31,7 +37,8 @@ function visibleMockRuns(): AgentRun[] {
 }
 
 function statsFrom(runs: AgentRun[], shiftId: string): ShiftStats {
-  if (runs.length === 0) {
+  const finished = runs.filter((r) => r.decision);
+  if (finished.length === 0) {
     return {
       shift_id: shiftId,
       decision_count: 0,
@@ -42,23 +49,23 @@ function statsFrom(runs: AgentRun[], shiftId: string): ShiftStats {
       picked_busier_stop: 0,
     };
   }
-  const single = runs.filter((r) => r.decision.chosen.delivery_count === 1).length;
+  const single = finished.filter((r) => r.decision!.chosen.delivery_count === 1).length;
   let shorter = 0;
   let busier = 0;
-  for (const run of runs) {
-    const pack = [run.decision.chosen, ...run.decision.alternatives];
+  for (const run of finished) {
+    const pack = [run.decision!.chosen, ...run.decision!.alternatives];
     const minW = Math.min(...pack.map((p) => p.total_weight));
     const maxD = Math.max(...pack.map((p) => p.demand_forecast));
-    if (run.decision.chosen.total_weight === minW) shorter += 1;
-    if (run.decision.chosen.demand_forecast === maxD) busier += 1;
+    if (run.decision!.chosen.total_weight === minW) shorter += 1;
+    if (run.decision!.chosen.demand_forecast === maxD) busier += 1;
   }
-  const avg = runs.reduce((s, r) => s + r.decision.chosen.total_weight, 0) / runs.length;
+  const avg = finished.reduce((s, r) => s + r.decision!.chosen.total_weight, 0) / finished.length;
   return {
     shift_id: shiftId,
-    decision_count: runs.length,
+    decision_count: finished.length,
     avg_total_weight_min: Math.round(avg * 10) / 10,
-    pct_single_stop: single / runs.length,
-    pct_multi_stop: 1 - single / runs.length,
+    pct_single_stop: single / finished.length,
+    pct_multi_stop: 1 - single / finished.length,
     picked_shorter_trip: shorter,
     picked_busier_stop: busier,
   };

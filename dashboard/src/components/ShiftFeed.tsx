@@ -31,12 +31,24 @@ export function ShiftFeed({ runs, selectedId, onSelect }: Props) {
                 <time dateTime={run.created_at}>
                   {new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </time>
-                {run.has_directions ? <span className="badge">directions</span> : null}
-              </div>
-              <p className="feed-title">
-                {deliveries(run.chosen.delivery_count)} to point {run.chosen.destination_index}
-              </p>
-              <p className="feed-mins">~{Math.round(run.chosen.total_weight)} min</p>
+              {run.status === "running" ? <span className="badge">live</span> : null}
+              {run.has_directions ? <span className="badge">directions</span> : null}
+            </div>
+            {run.status === "running" ? (
+              <>
+                <p className="feed-title">In progress…</p>
+                <p className="feed-mins">
+                  {run.event_count === 1 ? "1 tool" : `${run.event_count} tools`}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="feed-title">
+                  {deliveries(run.chosen.delivery_count)} to point {run.chosen.destination_index}
+                </p>
+                <p className="feed-mins">~{Math.round(run.chosen.total_weight)} min</p>
+              </>
+            )}
               <p className="feed-excerpt">{run.excerpt}</p>
             </button>
           </li>
