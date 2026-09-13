@@ -39,8 +39,9 @@ logger = logging.getLogger("courier_api")
 
 # The simulator parks the courier while /decision is in flight, so answering
 # late looks the same as not answering at all. Give up on the LLM early and
-# return the local plan instead of leaving the courier idle.
-AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "8"))
+# return the local plan instead of leaving the courier idle. Distinct from the
+# simulator's own AGENT_TIMEOUT_SECONDS, which must stay larger than this.
+AGENT_LLM_TIMEOUT_SECONDS = float(os.getenv("AGENT_LLM_TIMEOUT_SECONDS", "20"))
 AGENT_USE_LLM = os.getenv("AGENT_USE_LLM", "1").strip().lower() not in {"0", "false", "no"}
 
 app.add_middleware(
@@ -131,7 +132,7 @@ async def decide_for_simulator(request: SimulatorDecisionRequest, http_request: 
                 extra=extra,
                 on_update=save_run,
             ),
-            timeout=AGENT_TIMEOUT_SECONDS,
+            timeout=AGENT_LLM_TIMEOUT_SECONDS,
         )
         if agent_run.decision is None:
             raise RuntimeError("DecisionAgent terminó sin decisión")
