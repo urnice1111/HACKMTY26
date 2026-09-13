@@ -1,0 +1,404 @@
+:root {
+  --bg: #12141a;
+  --panel: #1a1d26;
+  --border: #2c3140;
+  --text: #c5cad6;
+  --text-h: #f4f6fb;
+  --muted: #8b93a7;
+  --accent: #7ee0c2;
+  --warn: #e6b85c;
+  --bad: #e07a7a;
+  --winner: #24352f;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text-h);
+  font-weight: 560;
+  margin: 0;
+}
+
+h1 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: #242836;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+.shell {
+  min-height: 100svh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shift-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.shift-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.shift-form input {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 180px;
+}
+
+.live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.live.mock {
+  color: var(--warn);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(126, 224, 194, 0.15);
+}
+
+.live.mock .dot {
+  background: var(--warn);
+}
+
+.banner {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  border-radius: 6px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+
+aside {
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+}
+
+.feed {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feed-card {
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feed-card.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.feed-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.feed-title {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.feed-mins,
+.feed-excerpt,
+.muted,
+.notes,
+.hops,
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.feed-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.badge {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.replay-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tick {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  opacity: 0.28;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.tick.is-on {
+  opacity: 1;
+}
+
+.tick.is-current {
+  background: #222733;
+}
+
+.tick.is-finale {
+  outline: 1px solid var(--accent);
+  background: var(--winner);
+}
+
+.tick.is-bad {
+  outline: 1px solid var(--bad);
+}
+
+.tick-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.tick-label {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.tick-summary {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hero-copy {
+  margin: 8px 0 0;
+  font-size: 16px;
+  color: var(--text-h);
+  max-width: 62ch;
+}
+
+.directions ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.compare-col {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.compare-col.is-winner {
+  background: var(--winner);
+  border-color: var(--accent);
+  transform: scale(1.01);
+}
+
+.compare-col h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.compare-col dl {
+  margin: 0;
+}
+
+.compare-col dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.compare-col dt {
+  color: var(--muted);
+}
+
+.compare-col dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.why {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 14px 0 20px;
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.stats strong {
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.empty {
+  padding: 48px 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

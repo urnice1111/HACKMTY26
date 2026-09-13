@@ -2,12 +2,44 @@ import logging
 from enum import Enum
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+
+from API.run_store import (
+    DEFAULT_SHIFT_ID,
+    RunListResponse,
+    ShiftStats,
+    get_run,
+    list_runs,
+    save_run,
+    stats_from,
+    to_summary,
+)
+from DecisionAgent.Models.structured_output import AgentRun
 from DecisionAgent.runner import run_routing_agent
 
 app = FastAPI(title="Courier Decision API")
 logger = logging.getLogger("courier_api")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+
+if not supabase_url or not supabase_key:
+    raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_KEY en .env")
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 
 class CourierState(str, Enum):
@@ -138,7 +170,8 @@ async def optimize_route(
                     "courier_status": request.estadoCourier.value,
                     "current_pos": list(request.current_pos),
                     "points_to_visit": [point.model_dump(mode="json") for point in points],
-                    "active_orders": request.pedidosActivos,
+                    "active_orders": courier.activeOrders,
+                    "shift_id": DEFAULT_SHIFT_ID,
                 },
             )
             logger.info(
@@ -160,9 +193,37 @@ async def optimize_route(
         if len(visit_indexes) != len(indexes) - 1 or len(set(visit_indexes)) != len(visit_indexes):
             raise HTTPException(status_code=502, detail="DecisionAgent devolvió índices de ruta inválidos")
 
-        description = agent_run.decision.description
+        save_run(decision)
 
     return OptimizedRoute(
         puntosVisitar=[points[index - 1] for index in visit_indexes],
         description=description,
     )
+
+
+@app.post("/v1/runs", response_model=AgentRun)
+def ingest_run(run: AgentRun) -> AgentRun:
+    """Accept a full AgentRun (tool steps + nested decision) for dashboard replay."""
+    return save_run(run)
+
+
+@app.get("/v1/shifts/{shift_id}/runs", response_model=RunListResponse)
+def get_shift_runs(
+    shift_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> RunListResponse:
+    runs = list_runs(shift_id, limit=limit)
+    return RunListResponse(runs=[to_summary(run) for run in runs])
+
+
+@app.get("/v1/runs/{run_id}", response_model=AgentRun)
+def get_run_detail(run_id: str) -> AgentRun:
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run no encontrado")
+    return run
+
+
+@app.get("/v1/shifts/{shift_id}/stats", response_model=ShiftStats)
+def get_shift_stats(shift_id: str) -> ShiftStats:
+    return stats_from(list_runs(shift_id, limit=200), shift_id)

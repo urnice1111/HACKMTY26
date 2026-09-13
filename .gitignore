@@ -5,3 +5,5 @@ __pycache__/
 
 /tests
 .env
+dashboard/node_modules/
+dashboard/dist/
