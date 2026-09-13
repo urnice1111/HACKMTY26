@@ -1,7 +1,12 @@
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, BeforeValidator, ConfigDict, Field
+
+
+def empty_if_none(value: Any) -> Any:
+    """Go marshals empty slices as JSON null; treat that as an empty list."""
+    return [] if value is None else value
 
 
 class CourierState(str, Enum):
@@ -74,8 +79,12 @@ class SimulatorPrecedence(BaseModel):
 
 class SimulatorRestrictions(BaseModel):
     capacidad_maxima: int = Field(ge=0)
-    pedidos_activos: list[dict] = Field(default_factory=list)
-    precedencias: list[SimulatorPrecedence] = Field(default_factory=list)
+    pedidos_activos: Annotated[list[dict], BeforeValidator(empty_if_none)] = Field(
+        default_factory=list
+    )
+    precedencias: Annotated[list[SimulatorPrecedence], BeforeValidator(empty_if_none)] = (
+        Field(default_factory=list)
+    )
 
 
 class SimulatorDecisionRequest(BaseModel):
@@ -96,12 +105,24 @@ class SimulatorDecisionRequest(BaseModel):
     matriz_unidad: Literal["mxn_equivalente"]
     valor_minuto_mxn: float = Field(gt=0)
     restricciones: SimulatorRestrictions
-    pedidos_disponibles: list[dict] = Field(default_factory=list)
+    pedidos_disponibles: Annotated[list[dict], BeforeValidator(empty_if_none)] = Field(
+        default_factory=list
+    )
 
 
 class SimulatorDecisionResponse(BaseModel):
     """Decision shape consumed by ``internal/sim.AgentClient``."""
 
-    aceptar_pedidos: list[str] = Field(default_factory=list)
-    paradas_ordenadas: list[SimulatorStop] = Field(default_factory=list)
-    ruta_propuesta: list[dict] = Field(default_factory=list)
+    aceptar_pedidos: Annotated[list[str], BeforeValidator(empty_if_none)] = Field(
+        default_factory=list
+    )
+    paradas_ordenadas: Annotated[list[SimulatorStop], BeforeValidator(empty_if_none)] = (
+        Field(default_factory=list)
+    )
+    ruta_propuesta: Annotated[list[dict], BeforeValidator(empty_if_none)] = Field(
+        default_factory=list
+    )
+    descripcion: str = ""
+    direcciones: Annotated[list[str], BeforeValidator(empty_if_none)] = Field(
+        default_factory=list
+    )

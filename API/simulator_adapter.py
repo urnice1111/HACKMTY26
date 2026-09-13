@@ -136,7 +136,9 @@ def _selected_stops(
 
 
 def decision_response(
-    request: SimulatorDecisionRequest, indexes: list[int]
+    request: SimulatorDecisionRequest,
+    indexes: list[int],
+    description: str = "",
 ) -> SimulatorDecisionResponse:
     """Map a complete agent path back to the decision expected by Go.
 
@@ -187,4 +189,135 @@ def decision_response(
         aceptar_pedidos=accepted,
         paradas_ordenadas=stops,
         ruta_propuesta=[],
+        descripcion=description,
+        direcciones=directions_for(stops),
+    )
+
+
+def directions_for(stops: list[SimulatorStop]) -> list[str]:
+    lines: list[str] = []
+    for stop in stops:
+        order = stop.pedido_id or stop.id
+        if stop.type == "pick":
+            lines.append(f"Dirígete a recoger el pedido {order}.")
+        elif stop.type == "drop":
+            lines.append(f"Entrega el pedido {order}.")
+    return lines
+
+
+def _stop_index(request: SimulatorDecisionRequest, stop_id: str) -> int | None:
+    for index, point in enumerate(request.puntos_ruta):
+        if point.id == stop_id:
+            return index
+    return None
+
+
+def _hops_allowed(request: SimulatorDecisionRequest, stop_ids: list[str]) -> bool:
+    indexes = [0]
+    for stop_id in stop_ids:
+        index = _stop_index(request, stop_id)
+        if index is None:
+            return False
+        indexes.append(index)
+    for source, destination in zip(indexes, indexes[1:]):
+        if request.matriz[source][destination] is None:
+            return False
+    return True
+
+
+def _route_cost(request: SimulatorDecisionRequest, stop_ids: list[str]) -> float:
+    indexes = [0]
+    for stop_id in stop_ids:
+        index = _stop_index(request, stop_id)
+        if index is None:
+            return float("inf")
+        indexes.append(index)
+    total = 0.0
+    for source, destination in zip(indexes, indexes[1:]):
+        hop = request.matriz[source][destination]
+        if hop is None:
+            return float("inf")
+        total += float(hop)
+    return total
+
+
+def _order_payment(request: SimulatorDecisionRequest, order_id: str) -> float:
+    for order in request.pedidos_disponibles:
+        if str(order.get("pedido_id")) == order_id:
+            try:
+                return float(order.get("pago_mxn") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+    return 0.0
+
+
+def fallback_decision(
+    request: SimulatorDecisionRequest,
+    description: str,
+) -> SimulatorDecisionResponse:
+    """Build a feasible plan Go will apply even if the LLM fails.
+
+    Mandatory stops stay first. Remaining capacity is filled with reachable
+    available orders so an idle courier is not left waiting with an empty route.
+    """
+    stops = [point for point in request.puntos_ruta[1:] if point.obligatoria]
+    accepted: list[str] = []
+    capacity = request.capacidad_maxima - request.pedidos_activos
+    available: dict[str, list[SimulatorStop]] = {}
+    for point in request.puntos_ruta[1:]:
+        if point.obligatoria or not point.pedido_id:
+            continue
+        available.setdefault(point.pedido_id, []).append(point)
+
+    ranked: list[tuple[str, list[SimulatorStop]]] = []
+    for order_id, order_stops in available.items():
+        types = {stop.type for stop in order_stops}
+        if types != {"pick", "drop"}:
+            continue
+        ordered = sorted(order_stops, key=lambda stop: 0 if stop.type == "pick" else 1)
+        ranked.append((order_id, ordered))
+
+    def net_gain(order_id: str, ordered: list[SimulatorStop]) -> float:
+        candidate_ids = [stop.id for stop in stops + ordered]
+        return _order_payment(request, order_id) - _route_cost(request, candidate_ids)
+
+    ranked.sort(key=lambda item: net_gain(item[0], item[1]), reverse=True)
+
+    for order_id, ordered in ranked:
+        if len(accepted) >= capacity:
+            break
+        candidate = stops + ordered
+        candidate_ids = [stop.id for stop in candidate]
+        if not _hops_allowed(request, candidate_ids):
+            continue
+        if net_gain(order_id, ordered) < 0 and stops:
+            continue
+        stops = candidate
+        accepted.append(order_id)
+
+    if not stops and capacity > 0:
+        for order_id, ordered in ranked:
+            if _hops_allowed(request, [stop.id for stop in ordered]):
+                stops = ordered
+                accepted = [order_id]
+                break
+
+    if not description:
+        if accepted:
+            description = (
+                "Se aceptó "
+                + ", ".join(accepted)
+                + " para que el courier deje de esperar."
+            )
+        elif stops:
+            description = "Se mantiene la ruta de los pedidos ya activos."
+        else:
+            description = "No hay una ruta alcanzable ahora mismo."
+
+    return SimulatorDecisionResponse(
+        aceptar_pedidos=accepted,
+        paradas_ordenadas=stops,
+        ruta_propuesta=[],
+        descripcion=description,
+        direcciones=directions_for(stops),
     )

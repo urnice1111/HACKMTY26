@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from collections.abc import Callable
@@ -171,6 +172,7 @@ async def run_routing_agent(
     run = _stub_run(ctx, run_id, resolved_shift)
     _notify(on_update, run)
     items: list = []
+    streamed = None
     try:
         streamed = Runner.run_streamed(
             routing_agent,
@@ -204,7 +206,9 @@ async def run_routing_agent(
         finished = finished.model_copy(update={"created_at": run.created_at})
         _notify(on_update, finished)
         return finished
-    except Exception:
+    except (Exception, asyncio.CancelledError):
+        if streamed is not None:
+            streamed.cancel(mode="immediate")
         failed = run.model_copy(
             update={
                 "status": "error",

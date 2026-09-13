@@ -1,7 +1,11 @@
+import asyncio
 import logging
+import os
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+from API.request_work import run_request_work
 
 from API.models import (
     OptimizeRouteRequest,
@@ -25,12 +29,19 @@ from API.simulator_adapter import (
     agent_extra,
     agent_matrix,
     decision_response,
+    fallback_decision,
 )
 from DecisionAgent.Models.structured_output import AgentRun
 from DecisionAgent.runner import run_routing_agent
 
 app = FastAPI(title="Courier Decision API")
 logger = logging.getLogger("courier_api")
+
+# The simulator parks the courier while /decision is in flight, so answering
+# late looks the same as not answering at all. Give up on the LLM early and
+# return the local plan instead of leaving the courier idle.
+AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "8"))
+AGENT_USE_LLM = os.getenv("AGENT_USE_LLM", "1").strip().lower() not in {"0", "false", "no"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,47 +97,82 @@ def health_check() -> dict[str, str]:
 
 
 @app.post("/decision", response_model=SimulatorDecisionResponse)
-async def decide_for_simulator(request: SimulatorDecisionRequest) -> SimulatorDecisionResponse:
+async def decide_for_simulator(request: SimulatorDecisionRequest, http_request: Request) -> SimulatorDecisionResponse:
     """Use the Go simulator's native contract to obtain a feasible route plan.
 
-    The streaming callback stores the intermediate tool trace immediately, so
-    the React dashboard can replay an in-progress decision while Go waits for
-    the final response.
+    If the LLM is slow, fails, or returns an invalid path, a local greedy plan
+    accepts reachable offers so the courier is not left idle.
     """
     try:
         extra = agent_extra(request)
+    except SimulatorContractError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    if not AGENT_USE_LLM:
+        logger.info("AGENT_USE_LLM disabled; answering %s with the local plan", request.evento)
+        return fallback_decision(
+            request,
+            "Se armó una ruta local porque el agente LLM está deshabilitado.",
+        )
+
+    try:
         logger.info(
             "Simulator event %s: planning across %s points",
             request.evento,
             len(request.puntos_ruta),
         )
-        agent_run = await run_routing_agent(
-            coordinates=agent_coordinates(request),
-            matrix=agent_matrix(request),
-            origin=0,
-            now=request.tiempo_simulado,
-            extra=extra,
-            on_update=save_run,
+        agent_run = await run_request_work(
+            http_request,
+            lambda: run_routing_agent(
+                coordinates=agent_coordinates(request),
+                matrix=agent_matrix(request),
+                origin=0,
+                now=request.tiempo_simulado,
+                extra=extra,
+                on_update=save_run,
+            ),
+            timeout=AGENT_TIMEOUT_SECONDS,
         )
         if agent_run.decision is None:
-            raise HTTPException(status_code=502, detail="DecisionAgent terminó sin decisión")
-        return decision_response(request, agent_run.decision.chosen.indexes)
+            raise RuntimeError("DecisionAgent terminó sin decisión")
+        description = (agent_run.description or "").strip()
+        return decision_response(
+            request,
+            agent_run.decision.chosen.indexes,
+            description=description,
+        )
     except SimulatorContractError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        logger.warning("Invalid agent route; using a feasible local plan: %s", error)
+        return fallback_decision(
+            request,
+            f"Se armó una ruta local porque la decisión no era válida: {error}",
+        )
     except HTTPException:
         raise
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=f"Datos inválidos para el agente: {error}") from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=f"DecisionAgent no disponible: {error}") from error
+    except asyncio.TimeoutError:
+        logger.warning("DecisionAgent timed out; using a feasible local plan")
+        return fallback_decision(
+            request,
+            "Se armó una ruta local porque el agente tardó demasiado.",
+        )
+    except (ValueError, RuntimeError) as error:
+        logger.warning("DecisionAgent unavailable; using a feasible local plan: %s", error)
+        return fallback_decision(
+            request,
+            f"Se armó una ruta local porque el agente no respondió: {error}",
+        )
     except Exception as error:
         logger.exception("DecisionAgent error while handling simulator request")
-        raise HTTPException(status_code=500, detail=f"DecisionAgent error: {error}") from error
+        return fallback_decision(
+            request,
+            f"Se armó una ruta local porque el agente falló: {error}",
+        )
 
 
 @app.post("/optimize-route", response_model=OptimizedRoute)
 async def optimize_route(
     request: OptimizeRouteRequest,
+    http_request: Request,
     mock: bool = Query(default=False, description="Orden local para pruebas; no llama DecisionAgent"),
 ) -> OptimizedRoute:
     """Order the simulator's points and return the selected points plus its reason."""
@@ -152,18 +198,21 @@ async def optimize_route(
     else:
         try:
             logger.info("Calling DecisionAgent with %s visit points", len(points))
-            agent_run = await run_routing_agent(
-                coordinates=coordinates,
-                matrix=request.matrix,
-                origin=0,
-                extra={
-                    "courier_status": request.estadoCourier.value,
-                    "current_pos": list(request.current_pos),
-                    "points_to_visit": [point.model_dump(mode="json") for point in points],
-                    "active_orders": request.pedidosActivos,
-                    "shift_id": DEFAULT_SHIFT_ID,
-                },
-                on_update=save_run,
+            agent_run = await run_request_work(
+                http_request,
+                lambda: run_routing_agent(
+                    coordinates=coordinates,
+                    matrix=request.matrix,
+                    origin=0,
+                    extra={
+                        "courier_status": request.estadoCourier.value,
+                        "current_pos": list(request.current_pos),
+                        "points_to_visit": [point.model_dump(mode="json") for point in points],
+                        "active_orders": request.pedidosActivos,
+                        "shift_id": DEFAULT_SHIFT_ID,
+                    },
+                    on_update=save_run,
+                ),
             )
             if agent_run.decision is None:
                 raise HTTPException(status_code=502, detail="DecisionAgent terminó sin decisión")
@@ -174,6 +223,8 @@ async def optimize_route(
             description = agent_run.description
         except HTTPException:
             raise
+        except asyncio.TimeoutError as error:
+            raise HTTPException(status_code=504, detail="DecisionAgent timed out") from error
         except ValueError as error:
             raise HTTPException(status_code=422, detail=f"Datos inválidos para el agente: {error}") from error
         except RuntimeError as error:
