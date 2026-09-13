@@ -19,4 +19,4 @@ VITE_SHIFT_ID=shift-abc
 VITE_USE_MOCK=0
 ```
 
-`POST /optimize-route` still returns only `{ points_to_visit, description }`. Full tool-step history is stored in memory and served from `/v1`. Restarting the API clears it.
+`POST /optimize-route` takes courier state from the simulator (`estadoCourier`, `current_pos`, `pedidosActivos`, `puntosVisitar`, `matrix`) and returns `{ puntosVisitar, description }`. Full tool-step history is stored in memory and served from `/v1`. Restarting the API clears it.

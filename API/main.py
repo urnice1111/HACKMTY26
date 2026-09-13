@@ -1,11 +1,9 @@
 import logging
-from enum import Enum
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-
+from API.models import OptimizeRouteRequest, OptimizedRoute
 from API.run_store import (
     DEFAULT_SHIFT_ID,
     RunListResponse,
@@ -32,58 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-
-class CourierState(str, Enum):
-    DROP = "drop"
-    PICK = "pick"
-    WAIT = "wait"
-
-
-class OrderState(str, Enum):
-    DROP = "drop"
-    PICK = "pick"
-
-
-class Node(BaseModel):
-    """A visit point in [longitude, latitude] order."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    state: OrderState = Field(validation_alias=AliasChoices("state", "type"))
-    order_pos: tuple[float, float] = Field(
-        validation_alias=AliasChoices("order_pos", "orderPos")
-    )
-
-
-class OptimizeRouteRequest(BaseModel):
-    """Everything the simulator sends for one routing decision."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    estadoCourier: CourierState = Field(
-        validation_alias=AliasChoices("estadoCourier", "status", "courier_state")
-    )
-    current_pos: tuple[float, float] = Field(
-        validation_alias=AliasChoices("current_pos", "currentPos")
-    )
-    pedidosActivos: int = Field(
-        ge=0,
-        validation_alias=AliasChoices("pedidosActivos", "activeOrders", "active_orders"),
-    )
-    puntosVisitar: list[Node] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("puntosVisitar", "points_to_visit"),
-    )
-    matrix: list[list[float]]
-
-
-class OptimizedRoute(BaseModel):
-    """The route answer sent immediately back to the simulator."""
-
-    puntosVisitar: list[Node]
-    description: str
 
 
 def as_agent_coordinate(position: tuple[float, float]) -> list[float]:
@@ -163,15 +109,20 @@ async def optimize_route(
                     "courier_status": request.estadoCourier.value,
                     "current_pos": list(request.current_pos),
                     "points_to_visit": [point.model_dump(mode="json") for point in points],
-                    "active_orders": courier.activeOrders,
+                    "active_orders": request.pedidosActivos,
                     "shift_id": DEFAULT_SHIFT_ID,
                 },
                 on_update=save_run,
             )
+            if agent_run.decision is None:
+                raise HTTPException(status_code=502, detail="DecisionAgent terminó sin decisión")
             logger.info(
                 "DecisionAgent returned route indexes: %s",
-                agent_run.decision.chosen.indexes,
+                agent_run.chosen.indexes,
             )
+            description = agent_run.description
+        except HTTPException:
+            raise
         except ValueError as error:
             raise HTTPException(status_code=422, detail=f"Datos inválidos para el agente: {error}") from error
         except RuntimeError as error:
@@ -179,7 +130,7 @@ async def optimize_route(
         except Exception as error:
             raise HTTPException(status_code=500, detail=f"DecisionAgent error: {error}") from error
 
-        indexes = agent_run.decision.chosen.indexes
+        indexes = agent_run.chosen.indexes
         if not indexes or indexes[0] != 0:
             raise HTTPException(status_code=502, detail="DecisionAgent devolvió una ruta sin origen")
 
