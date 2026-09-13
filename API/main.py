@@ -33,13 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
-
-if not supabase_url or not supabase_key:
-    raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_KEY en .env")
-
-supabase: Client = create_client(supabase_url, supabase_key)
 
 
 class CourierState(str, Enum):
