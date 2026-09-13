@@ -45,3 +45,29 @@ class RoutingDecision(BaseModel):
     notes: str = Field(
         description="Optional extra color: parking, peak hour, congestion. Plain language."
     )
+
+
+class ToolEvent(BaseModel):
+    seq: int
+    tool: str
+    label: str
+    summary: str
+    args: dict = Field(default_factory=dict)
+    ok: bool = True
+
+
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class AgentRun(BaseModel):
+    run_id: str
+    shift_id: str | None = None
+    created_at: str
+    duration_ms: float
+    point_count: int
+    origin: GeoPoint
+    decision: RoutingDecision
+    events: list[ToolEvent] = Field(default_factory=list)
+    usage: TokenUsage = Field(default_factory=TokenUsage)

@@ -50,12 +50,12 @@ def dry_run() -> None:
 def live_run() -> None:
     from DecisionAgent.runner import run_routing_agent_sync
 
-    decision = run_routing_agent_sync(
+    run = run_routing_agent_sync(
         coordinates=_SAMPLE_COORDINATES,
         origin=0,
         now=_SAMPLE_NOW,
     )
-    print(json.dumps(decision.model_dump(), indent=2))
+    print(json.dumps(run.model_dump(), indent=2))
 
 
 def main() -> None:
