@@ -1,3 +1,6 @@
 openai-agents
 pydantic
 python-dotenv
+fastapi
+supabase
+uvicorn[standard]
