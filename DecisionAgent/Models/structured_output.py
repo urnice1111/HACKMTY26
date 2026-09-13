@@ -61,6 +61,11 @@ class TokenUsage(BaseModel):
     output_tokens: int = 0
 
 
+class RouteDirections(BaseModel):
+    steps: list[str]
+    reason: str
+
+
 class AgentRun(BaseModel):
     run_id: str
     shift_id: str | None = None
@@ -71,3 +76,14 @@ class AgentRun(BaseModel):
     decision: RoutingDecision
     events: list[ToolEvent] = Field(default_factory=list)
     usage: TokenUsage = Field(default_factory=TokenUsage)
+    directions: RouteDirections | None = None
+
+    @property
+    def chosen(self) -> RankedPath:
+        """Alias so API handlers can keep using decision.chosen."""
+        return self.decision.chosen
+
+    @property
+    def description(self) -> str:
+        """Alias so API handlers can keep using decision.description."""
+        return self.decision.description
